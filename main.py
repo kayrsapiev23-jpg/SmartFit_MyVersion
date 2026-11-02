@@ -242,7 +242,11 @@ def dashboard(request:Request):
         reminders=c.execute('SELECT * FROM reminders WHERE user_id=? AND completed=0 ORDER BY remind_on LIMIT 20',(user,)).fetchall()
         plan=c.execute('SELECT * FROM workout_plans WHERE user_id=? ORDER BY id DESC LIMIT 1',(user,)).fetchone()
         total=c.execute('SELECT COUNT(*) AS total FROM workout_sessions WHERE user_id=?',(user,)).fetchone()['total']
-    today=date.today();thisweek=sum(1 for s in sessions if date.fromisoformat(s['completed_on'])>=today-timedelta(days=today.weekday()))
+        day_now=date.today()
+        week_start=day_now-timedelta(days=day_now.weekday())
+        thisweek=c.execute('SELECT COUNT(*) AS total FROM workout_sessions WHERE user_id=? AND completed_on>=? AND completed_on<=?',
+                           (user,week_start.isoformat(),day_now.isoformat())).fetchone()['total']
+    today=date.today()
     achievements=[('First Workout',total>=1),('5 Workouts',total>=5),('10 Workouts',total>=10),('Weekly Consistency',thisweek>=p['training_days'])]
     first_weekday,month_days=calendar.monthrange(today.year,today.month)
     active_dates={row['completed_on'] for row in sessions}
@@ -256,28 +260,52 @@ def progress(request:Request):
         profile=c.execute('SELECT * FROM profiles WHERE user_id=?',(user,)).fetchone()
         if not profile:return go('/profile')
         weights=c.execute('SELECT weight_kg,recorded_at FROM weight_history WHERE user_id=? ORDER BY recorded_at,id',(user,)).fetchall()
-        workouts=c.execute('SELECT completed_on,title,id FROM workout_sessions WHERE user_id=? ORDER BY completed_on,id',(user,)).fetchall()
-        exercises=c.execute("""SELECT e.exercise, COUNT(*) AS times, SUM(e.sets) AS sets_total, SUM(e.sets*e.reps) AS reps_total
+        workouts=c.execute('SELECT id,title,completed_on,notes FROM workout_sessions WHERE user_id=? ORDER BY completed_on DESC,id DESC',(user,)).fetchall()
+        # Select each saved exercise, then aggregate in Python. Works identically in PostgreSQL and SQLite.
+        details=c.execute('''SELECT e.session_id,e.exercise,e.sets,e.reps
             FROM exercise_logs e JOIN workout_sessions s ON s.id=e.session_id
-            WHERE s.user_id=? GROUP BY LOWER(e.exercise) ORDER BY times DESC LIMIT 8""",(user,)).fetchall()
+            WHERE s.user_id=? ORDER BY e.id''',(user,)).fetchall()
     today=date.today()
-    month_count=sum(1 for w in workouts if w['completed_on'][:7]==today.strftime('%Y-%m'))
     week_start=today-timedelta(days=today.weekday())
-    week_count=sum(1 for w in workouts if week_start<=date.fromisoformat(w['completed_on'])<=today)
+    week_count=sum(1 for w in workouts if week_start <= date.fromisoformat(w['completed_on']) <= today)
+    month_count=sum(1 for w in workouts if w['completed_on'][:7]==today.strftime('%Y-%m'))
     target_sessions=max(1,profile['training_days'])
     adherence=round(min(100,100*week_count/target_sessions))
-    weekly=[]
-    for i in range(7):
-        day=today-timedelta(days=6-i)
-        weekly.append({'label':day.strftime('%a'),'count':sum(1 for w in workouts if w['completed_on']==day.isoformat())})
+    daily={}
+    for w in workouts:daily[w['completed_on']]=daily.get(w['completed_on'],0)+1
+    weekly=[{'label':(today-timedelta(days=6-i)).strftime('%a'),
+              'date':(today-timedelta(days=6-i)).isoformat(),
+              'count':daily.get((today-timedelta(days=6-i)).isoformat(),0)} for i in range(7)]
+    monthly=[]
+    for offset in range(5,-1,-1):
+        year=today.year+(today.month-1-offset)//12
+        month=(today.month-1-offset)%12+1
+        key=f'{year:04d}-{month:02d}'
+        monthly.append({'label':date(year,month,1).strftime('%b'),
+                        'count':sum(1 for w in workouts if w['completed_on'].startswith(key))})
+    summary={}
+    by_session={}
+    for row in details:
+        name=row['exercise'].strip()
+        key=name.casefold()
+        item=summary.setdefault(key,{'exercise':name,'times':0,'sets_total':0,'reps_total':0})
+        item['times']+=1
+        item['sets_total']+=row['sets']
+        item['reps_total']+=row['sets']*row['reps']
+        by_session.setdefault(row['session_id'],[]).append(dict(row))
+    exercises=sorted(summary.values(),key=lambda x:(-x['times'],-x['sets_total'],x['exercise']))[:8]
+    recent_sessions=[dict(w, exercises=by_session.get(w['id'],[])) for w in workouts[:8]]
     values=[float(w['weight_kg']) for w in weights]
     low=min(values) if values else 0
-    high=max(values) if values else 0
-    spread=max(high-low,1)
-    weight_points=[{'label':str(w['recorded_at'])[:10],'value':w['weight_kg'],'height':round(12+76*(float(w['weight_kg'])-low)/spread)} for w in weights[-16:]]
-    return render(request,'progress.html',p=profile,month_count=month_count,week_count=week_count,
-        adherence=adherence,total=len(workouts),weekly=weekly,weight_points=weight_points,
-        exercises=exercises,has_data=bool(workouts or weights),weight_delta=round(values[-1]-values[0],1) if len(values)>=2 else None)
+    spread=max(max(values)-low,1) if values else 1
+    weight_points=[{'label':str(w['recorded_at'])[:10],'value':w['weight_kg'],
+                    'height':round(12+76*(float(w['weight_kg'])-low)/spread)} for w in weights[-16:]]
+    return render(request,'progress.html',p=profile,total=len(workouts),month_count=month_count,
+        week_count=week_count,adherence=adherence,weekly=weekly,monthly=monthly,
+        exercises=exercises,recent_sessions=recent_sessions,
+        total_sets=sum(row['sets'] for row in details),
+        weight_points=weight_points,has_data=bool(workouts or weights),
+        weight_delta=round(values[-1]-values[0],1) if len(values)>=2 else None)
 
 @app.post('/plan')
 def generate_plan(request:Request,token:str=Form(...)):
@@ -289,16 +317,54 @@ def generate_plan(request:Request,token:str=Form(...)):
         c.execute('INSERT INTO workout_plans(user_id,title,details_json) VALUES (?,?,?)',(user,'Starter activity plan',json.dumps(plan)))
     return go('/workout-plan')
 
+def validate_workout(title,completed_on,exercise,sets,reps,notes):
+    # Validate before writing any rows.
+    try:
+        parsed=date.fromisoformat(completed_on)
+    except (ValueError,TypeError):
+        raise HTTPException(400,'Invalid workout date')
+    if (not title.strip() or len(title.strip())>100 or len(notes)>300 or
+        parsed>date.today() or parsed<date(2000,1,1)):
+        raise HTTPException(400,'Please check session name, date and notes')
+    if not (1<=len(exercise)<=12 and len(exercise)==len(sets)==len(reps)):
+        raise HTTPException(400,'Add between 1 and 12 complete exercises')
+    entries=[]
+    for name,count,repetitions in zip(exercise,sets,reps):
+        name=name.strip()
+        if not (1<=len(name)<=100 and 1<=count<=20 and 1<=repetitions<=100):
+            raise HTTPException(400,'Each exercise needs a name, 1–20 sets and 1–100 reps')
+        entries.append((name,count,repetitions))
+    return title.strip(),parsed.isoformat(),notes.strip(),entries
+
 @app.post('/workouts')
-def add_workout(request:Request,token:str=Form(...),title:str=Form(...),completed_on:str=Form(...),exercise:str=Form(...),sets:int=Form(...),reps:int=Form(...),notes:str=Form('')):
+def add_workout(request:Request,token:str=Form(...),title:str=Form(...),completed_on:str=Form(...),
+                exercise:list[str]=Form(...),sets:list[int]=Form(...),reps:list[int]=Form(...),notes:str=Form('')):
     user=require_login(request);require_csrf(request,token)
-    try:d=date.fromisoformat(completed_on)
-    except ValueError:raise HTTPException(400,'Invalid date')
-    if not (1<=len(title.strip())<=100 and 1<=len(exercise.strip())<=100 and 1<=sets<=20 and 1<=reps<=100 and d<=date.today()):raise HTTPException(400,'Invalid workout')
+    title,completed_on,notes,entries=validate_workout(title,completed_on,exercise,sets,reps,notes)
     with db() as c:
-        session=c.execute('INSERT INTO workout_sessions(user_id,title,completed_on,notes) VALUES (?,?,?,?)',(user,title.strip(),completed_on,notes[:300])).lastrowid
-        c.execute('INSERT INTO exercise_logs(session_id,exercise,sets,reps) VALUES (?,?,?,?)',(session,exercise.strip(),sets,reps))
-    return go('/workouts')
+        session=c.execute('INSERT INTO workout_sessions(user_id,title,completed_on,notes) VALUES (?,?,?,?)',
+                          (user,title,completed_on,notes)).lastrowid
+        for name,count,repetitions in entries:
+            c.execute('INSERT INTO exercise_logs(session_id,exercise,sets,reps) VALUES (?,?,?,?)',
+                      (session,name,count,repetitions))
+    return go('/workouts?status=saved')
+
+@app.post('/workouts/{session_id}/edit')
+def edit_workout(request:Request,session_id:int,token:str=Form(...),title:str=Form(...),
+                 completed_on:str=Form(...),exercise:list[str]=Form(...),sets:list[int]=Form(...),
+                 reps:list[int]=Form(...),notes:str=Form('')):
+    user=require_login(request);require_csrf(request,token)
+    title,completed_on,notes,entries=validate_workout(title,completed_on,exercise,sets,reps,notes)
+    with db() as c:
+        owned=c.execute('SELECT id FROM workout_sessions WHERE id=? AND user_id=?',(session_id,user)).fetchone()
+        if not owned:raise HTTPException(404,'Workout not found')
+        c.execute('UPDATE workout_sessions SET title=?,completed_on=?,notes=? WHERE id=? AND user_id=?',
+                  (title,completed_on,notes,session_id,user))
+        c.execute('DELETE FROM exercise_logs WHERE session_id=?',(session_id,))
+        for name,count,repetitions in entries:
+            c.execute('INSERT INTO exercise_logs(session_id,exercise,sets,reps) VALUES (?,?,?,?)',
+                      (session_id,name,count,repetitions))
+    return go('/workouts?status=updated')
 
 @app.post('/reminders')
 def add_reminder(request:Request,token:str=Form(...),text:str=Form(...),remind_on:str=Form(...)):
@@ -367,11 +433,13 @@ async def ai_answer(request:Request,user:int,question:str):
 def delete_workout(request:Request,session_id:int,token:str=Form(...)):
     user=require_login(request);require_csrf(request,token)
     with db() as c:c.execute('DELETE FROM workout_sessions WHERE id=? AND user_id=?',(session_id,user))
-    return go('/workouts')
+    return go('/workouts?status=deleted')
 
 # Dedicated navigation pages for the redesigned SmartFit UI
 def dashboard_context(request):
     user=require_login(request)
+    today=date.today()
+    week_start=today-timedelta(days=today.weekday())
     with db() as c:
         p=c.execute('SELECT * FROM profiles WHERE user_id=?',(user,)).fetchone()
         if not p:return None
@@ -379,13 +447,29 @@ def dashboard_context(request):
         reminders=c.execute('SELECT * FROM reminders WHERE user_id=? AND completed=0 ORDER BY remind_on LIMIT 20',(user,)).fetchall()
         plan=c.execute('SELECT * FROM workout_plans WHERE user_id=? ORDER BY id DESC LIMIT 1',(user,)).fetchone()
         total=c.execute('SELECT COUNT(*) AS total FROM workout_sessions WHERE user_id=?',(user,)).fetchone()['total']
-    today=date.today()
-    thisweek=sum(1 for s in sessions if date.fromisoformat(s['completed_on'])>=today-timedelta(days=today.weekday()))
+        thisweek=c.execute('SELECT COUNT(*) AS total FROM workout_sessions WHERE user_id=? AND completed_on>=? AND completed_on<=?',
+                           (user,week_start.isoformat(),today.isoformat())).fetchone()['total']
+        current_month_start=today.replace(day=1).isoformat()
+        calendar_sessions=c.execute('SELECT completed_on FROM workout_sessions WHERE user_id=? AND completed_on>=? AND completed_on<=?',
+                                    (user,current_month_start,today.isoformat())).fetchall()
+        # Exercise rows are associated with the displayed sessions only; include other users' data never.
+        session_ids=[s['id'] for s in sessions]
+        details=[]
+        if session_ids:
+            marks=','.join('?' for _ in session_ids)
+            details=c.execute(f'''SELECT e.session_id,e.exercise,e.sets,e.reps FROM exercise_logs e
+                JOIN workout_sessions s ON s.id=e.session_id
+                WHERE s.user_id=? AND e.session_id IN ({marks}) ORDER BY e.id''',(user,*session_ids)).fetchall()
+    by_session={}
+    for r in details:by_session.setdefault(r['session_id'],[]).append(dict(r))
+    sessions=[dict(row,exercises=by_session.get(row['id'],[])) for row in sessions]
     first,days=calendar.monthrange(today.year,today.month)
-    dates={s['completed_on'] for s in sessions}
+    dates={s['completed_on'] for s in calendar_sessions}
     cells=[None]*first+[(day,date(today.year,today.month,day).isoformat() in dates) for day in range(1,days+1)]
     achievements=[('First Workout',total>=1),('5 Workouts',total>=5),('10 Workouts',total>=10),('Weekly Consistency',thisweek>=p['training_days'])]
-    return dict(p=p,sessions=sessions,reminders=reminders,plan=json.loads(plan['details_json']) if plan else None,total=total,thisweek=thisweek,today=today.isoformat(),calendar_title=today.strftime('%B %Y'),calendar_cells=cells,achievements=achievements)
+    return dict(p=p,sessions=sessions,reminders=reminders,plan=json.loads(plan['details_json']) if plan else None,
+                total=total,thisweek=thisweek,today=today.isoformat(),calendar_title=today.strftime('%B %Y'),
+                calendar_cells=cells,achievements=achievements)
 
 @app.get('/workout-plan',response_class=HTMLResponse)
 def workout_plan_page(request:Request):
@@ -393,9 +477,11 @@ def workout_plan_page(request:Request):
     return render(request,'workout_plan.html',**ctx) if ctx else go('/profile')
 
 @app.get('/workouts',response_class=HTMLResponse)
-def workouts_page(request:Request):
+def workouts_page(request:Request,status:str=''):
     ctx=dashboard_context(request)
-    return render(request,'workouts.html',**ctx) if ctx else go('/profile')
+    if ctx is None:return go('/profile')
+    ctx['status']=status if status in ('saved','updated','deleted') else ''
+    return render(request,'workouts.html',**ctx)
 
 @app.get('/calendar',response_class=HTMLResponse)
 def calendar_page(request:Request):
