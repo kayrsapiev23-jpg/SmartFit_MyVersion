@@ -200,7 +200,7 @@ def generate_plan(request:Request,token:str=Form(...)):
         if not p:return go('/profile')
         plan=plan_for(p)
         c.execute('INSERT INTO workout_plans(user_id,title,details_json) VALUES (?,?,?)',(user,'Starter activity plan',json.dumps(plan)))
-    return go('/dashboard#plan')
+    return go('/workout-plan')
 
 @app.post('/workouts')
 def add_workout(request:Request,token:str=Form(...),title:str=Form(...),completed_on:str=Form(...),exercise:str=Form(...),sets:int=Form(...),reps:int=Form(...),notes:str=Form('')):
@@ -211,7 +211,7 @@ def add_workout(request:Request,token:str=Form(...),title:str=Form(...),complete
     with db() as c:
         session=c.execute('INSERT INTO workout_sessions(user_id,title,completed_on,notes) VALUES (?,?,?,?)',(user,title.strip(),completed_on,notes[:300])).lastrowid
         c.execute('INSERT INTO exercise_logs(session_id,exercise,sets,reps) VALUES (?,?,?,?)',(session,exercise.strip(),sets,reps))
-    return go('/dashboard#workouts')
+    return go('/workouts')
 
 @app.post('/reminders')
 def add_reminder(request:Request,token:str=Form(...),text:str=Form(...),remind_on:str=Form(...)):
@@ -220,13 +220,13 @@ def add_reminder(request:Request,token:str=Form(...),text:str=Form(...),remind_o
     except ValueError:raise HTTPException(400,'Invalid reminder time')
     if not 1<=len(text.strip())<=160:raise HTTPException(400,'Invalid reminder')
     with db() as c:c.execute('INSERT INTO reminders(user_id,text,remind_on) VALUES (?,?,?)',(user,text.strip(),remind_on))
-    return go('/dashboard#reminders')
+    return go('/calendar')
 
 @app.post('/reminders/{reminder_id}/done')
 def reminder_done(request:Request,reminder_id:int,token:str=Form(...)):
     user=require_login(request);require_csrf(request,token)
     with db() as c:c.execute('UPDATE reminders SET completed=1 WHERE id=? AND user_id=?',(reminder_id,user))
-    return go('/dashboard#reminders')
+    return go('/calendar')
 
 @app.post('/chat',response_class=HTMLResponse)
 async def chat(request:Request,token:str=Form(...),question:str=Form(...)):
@@ -282,4 +282,47 @@ async def ai_answer(request:Request,user:int,question:str):
 def delete_workout(request:Request,session_id:int,token:str=Form(...)):
     user=require_login(request);require_csrf(request,token)
     with db() as c:c.execute('DELETE FROM workout_sessions WHERE id=? AND user_id=?',(session_id,user))
-    return go('/dashboard#workouts')
+    return go('/workouts')
+
+# Dedicated navigation pages for the redesigned SmartFit UI
+def dashboard_context(request):
+    user=require_login(request)
+    with db() as c:
+        p=c.execute('SELECT * FROM profiles WHERE user_id=?',(user,)).fetchone()
+        if not p:return None
+        sessions=c.execute('SELECT * FROM workout_sessions WHERE user_id=? ORDER BY completed_on DESC,id DESC LIMIT 60',(user,)).fetchall()
+        reminders=c.execute('SELECT * FROM reminders WHERE user_id=? AND completed=0 ORDER BY remind_on LIMIT 20',(user,)).fetchall()
+        plan=c.execute('SELECT * FROM workout_plans WHERE user_id=? ORDER BY id DESC LIMIT 1',(user,)).fetchone()
+        total=c.execute('SELECT COUNT(*) FROM workout_sessions WHERE user_id=?',(user,)).fetchone()[0]
+    today=date.today()
+    thisweek=sum(1 for s in sessions if date.fromisoformat(s['completed_on'])>=today-timedelta(days=today.weekday()))
+    first,days=calendar.monthrange(today.year,today.month)
+    dates={s['completed_on'] for s in sessions}
+    cells=[None]*first+[(day,date(today.year,today.month,day).isoformat() in dates) for day in range(1,days+1)]
+    achievements=[('First Workout',total>=1),('5 Workouts',total>=5),('10 Workouts',total>=10),('Weekly Consistency',thisweek>=p['training_days'])]
+    return dict(p=p,sessions=sessions,reminders=reminders,plan=json.loads(plan['details_json']) if plan else None,total=total,thisweek=thisweek,today=today.isoformat(),calendar_title=today.strftime('%B %Y'),calendar_cells=cells,achievements=achievements)
+
+@app.get('/workout-plan',response_class=HTMLResponse)
+def workout_plan_page(request:Request):
+    ctx=dashboard_context(request)
+    return render(request,'workout_plan.html',**ctx) if ctx else go('/profile')
+
+@app.get('/workouts',response_class=HTMLResponse)
+def workouts_page(request:Request):
+    ctx=dashboard_context(request)
+    return render(request,'workouts.html',**ctx) if ctx else go('/profile')
+
+@app.get('/calendar',response_class=HTMLResponse)
+def calendar_page(request:Request):
+    ctx=dashboard_context(request)
+    return render(request,'calendar.html',**ctx) if ctx else go('/profile')
+
+@app.get('/achievements',response_class=HTMLResponse)
+def achievements_page(request:Request):
+    ctx=dashboard_context(request)
+    return render(request,'achievements.html',**ctx) if ctx else go('/profile')
+
+@app.get('/agent',response_class=HTMLResponse)
+def agent_page(request:Request):
+    require_login(request)
+    return render(request,'agent.html')
