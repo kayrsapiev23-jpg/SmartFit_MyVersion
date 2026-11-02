@@ -1,1 +1,22 @@
-{% extends 'base.html' %}{% block content %}<div class="page-intro"><span class="eyebrow">SMARTFIT COACH · BETA</span><h1>Ask your fitness coach</h1><p>General training, recovery, and progress questions. Real AI requires API configuration.</p></div><section class="surface padded coach-page"><div class="coach-page-top"><span class="ai-orb">✦</span><div><h2>What can I help you with?</h2><p>Choose a prompt or ask your own question below.</p></div></div><div class="suggestion-grid"><button class="prompt-chip" data-prompt="Help me make a simple workout routine">Make a routine</button><button class="prompt-chip" data-prompt="How should I track my workout progress?">Track progress</button><button class="prompt-chip" data-prompt="Why is recovery important?">Learn about recovery</button></div><form action="/chat" method="post" class="coach-page-form"><input type="hidden" name="token" value="{{csrf}}"><textarea id="agentPageQuestion" name="question" maxlength="600" rows="4" placeholder="Ask about workouts, rest, or your routine..." required></textarea><button class="btn primary">Send question ↗</button></form></section>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<section class="coach-intro">
+  <div><span class="eyebrow">SMARTFIT · FREE LOCAL AI</span><h1>Meet your <em>AI Coach.</em></h1><p>Ask about exercise technique, balanced routines and recovery. The AI runs on your device — no subscriptions or API tokens.</p></div>
+  <div class="coach-intro-symbol" aria-hidden="true">✦</div>
+</section>
+<section class="coach-layout surface" aria-label="SmartFit local AI chat">
+  <div class="coach-conversation-bar"><div class="coach-status"><span class="coach-online-dot" data-coach-dot></span><div><b>SmartFit AI Coach Lite</b><small data-coach-status>Not started · Runs in your browser</small></div></div><button type="button" class="coach-clear" data-clear-chat>Clear chat</button></div>
+  <div class="coach-model-panel">
+    <div class="coach-model-explainer"><b>Free AI · 0 ₸ per message</b><small>Download once, then the model runs on your device. Requires WebGPU and available memory.</small></div>
+    <label class="coach-model-label" for="coachModelSelect">Model</label>
+    <select id="coachModelSelect" data-coach-model aria-label="Choose a local AI model"><option value="lite">Lite · SmolLM2 360M · ≈ 580 MB memory</option><option value="quality">Better answers · SmolLM2 1.7B · ≈ 2.7 GB memory</option></select>
+    <button type="button" class="coach-start" data-start-coach>Start free AI</button>
+  </div>
+  <div class="coach-progress" data-coach-progress-wrap hidden><div class="coach-progress-track"><span data-coach-progress-fill></span></div><small data-coach-progress-text>Preparing model…</small></div>
+  <div class="coach-messages coach-page-messages" id="pageMessages" role="log" aria-live="polite"><div class="coach-placeholder"><span class="coach-placeholder-mark">✦</span><b>Start the local model to chat</b><p>It is free, and no prompts are sent to an AI provider.</p></div></div>
+  <div class="coach-composer"><div class="coach-quick-prompts"><button type="button" class="prompt-chip" data-prompt="Create a comfortable beginner workout routine for 3 days a week">✧ Training plan</button><button type="button" class="prompt-chip" data-prompt="Explain a beginner-friendly squat technique">◇ Technique</button><button type="button" class="prompt-chip" data-prompt="How do I recover well between workouts?">☾ Recovery</button></div>
+    <form id="pageChatForm" class="coach-page-form coach-form"><textarea id="agentPageQuestion" name="message" maxlength="700" rows="2" placeholder="Start the AI and ask a question…" aria-label="Your message to the AI coach" required></textarea><button class="btn primary" type="submit" data-coach-send>Send ↗</button></form>
+    <p class="coach-privacy-note">Prompts are processed on your device. Chat history is saved privately in your SmartFit Supabase account. The first model download needs internet; small models may make mistakes. Fitness education only, not medical advice.</p>
+  </div>
+</section>
+{% endblock %}
