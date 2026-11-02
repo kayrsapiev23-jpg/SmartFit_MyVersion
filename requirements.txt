@@ -7,3 +7,4 @@ itsdangerous>=2.2
 authlib>=1.3
 httpx>=0.27
 openai>=1.50
+psycopg[binary]>=3.2,<4
