@@ -162,6 +162,36 @@ def dashboard(request:Request):
     calendar_cells=[None]*first_weekday+[(day, date(today.year,today.month,day).isoformat() in active_dates) for day in range(1,month_days+1)]
     return render(request,'dashboard.html',calendar_cells=calendar_cells,calendar_title=today.strftime('%B %Y'),p=p,history=list(reversed(history)),sessions=sessions,reminders=reminders,plan=json.loads(plan['details_json']) if plan else None,total=total,thisweek=thisweek,achievements=achievements,today=today.isoformat())
 
+@app.get('/progress',response_class=HTMLResponse)
+def progress(request:Request):
+    user=require_login(request)
+    with db() as c:
+        profile=c.execute('SELECT * FROM profiles WHERE user_id=?',(user,)).fetchone()
+        if not profile:return go('/profile')
+        weights=c.execute('SELECT weight_kg,recorded_at FROM weight_history WHERE user_id=? ORDER BY recorded_at,id',(user,)).fetchall()
+        workouts=c.execute('SELECT completed_on,title,id FROM workout_sessions WHERE user_id=? ORDER BY completed_on,id',(user,)).fetchall()
+        exercises=c.execute("""SELECT e.exercise, COUNT(*) AS times, SUM(e.sets) AS sets_total, SUM(e.sets*e.reps) AS reps_total
+            FROM exercise_logs e JOIN workout_sessions s ON s.id=e.session_id
+            WHERE s.user_id=? GROUP BY LOWER(e.exercise) ORDER BY times DESC LIMIT 8""",(user,)).fetchall()
+    today=date.today()
+    month_count=sum(1 for w in workouts if w['completed_on'][:7]==today.strftime('%Y-%m'))
+    week_start=today-timedelta(days=today.weekday())
+    week_count=sum(1 for w in workouts if week_start<=date.fromisoformat(w['completed_on'])<=today)
+    target_sessions=max(1,profile['training_days'])
+    adherence=round(min(100,100*week_count/target_sessions))
+    weekly=[]
+    for i in range(7):
+        day=today-timedelta(days=6-i)
+        weekly.append({'label':day.strftime('%a'),'count':sum(1 for w in workouts if w['completed_on']==day.isoformat())})
+    values=[float(w['weight_kg']) for w in weights]
+    low=min(values) if values else 0
+    high=max(values) if values else 0
+    spread=max(high-low,1)
+    weight_points=[{'label':w['recorded_at'][:10],'value':w['weight_kg'],'height':round(12+76*(float(w['weight_kg'])-low)/spread)} for w in weights[-16:]]
+    return render(request,'progress.html',p=profile,month_count=month_count,week_count=week_count,
+        adherence=adherence,total=len(workouts),weekly=weekly,weight_points=weight_points,
+        exercises=exercises,has_data=bool(workouts or weights),weight_delta=round(values[-1]-values[0],1) if len(values)>=2 else None)
+
 @app.post('/plan')
 def generate_plan(request:Request,token:str=Form(...)):
     user=require_login(request);require_csrf(request,token)
