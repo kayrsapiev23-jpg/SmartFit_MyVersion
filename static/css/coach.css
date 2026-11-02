@@ -44,3 +44,7 @@
 .agent-drawer .coach-progress{padding:8px 16px}
 .coach-messages .coach-msg{user-select:text}
 @media(max-width:700px){.coach-model-panel{padding:13px;align-items:stretch}.coach-model-label{display:none}.coach-model-panel select{max-width:none;flex:1 1 100%}.coach-model-panel .coach-start{width:100%}}
+
+/* Guided features work before starting the optional model. */
+.coach-guided-action{background:#314238!important;border-color:#557465!important;color:#dcf6e5!important;font-weight:700}
+.coach-guided-action:hover{background:#3b5145!important;border-color:#8ac49d!important}
