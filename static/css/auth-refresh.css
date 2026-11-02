@@ -1,0 +1,15 @@
+
+/* Compact photo-free sign-in */
+body.guest .sidebar, body.guest .topbar, body.guest footer {display:none!important}
+body.guest .app-shell,body.guest .page-content{margin:0!important;min-height:100vh!important;width:100%!important;max-width:none!important;padding:0!important}
+body.guest{background:radial-gradient(circle at 50% 0%,#26191f 0%,#111115 55%,#0c0c10 100%);color:#f6f4f6}
+.auth-center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 16px;box-sizing:border-box}
+.auth-box{box-sizing:border-box;width:min(100%,430px);padding:30px 32px;border:1px solid #353039;border-radius:22px;background:#1a191f;box-shadow:0 22px 80px #0007}
+.auth-logo{text-align:center;font-size:25px;font-weight:800;letter-spacing:-1px}.auth-logo span{color:#fa5968}
+.auth-box h1{font-size:27px;line-height:1.2;text-align:center;margin:20px 0 7px}.auth-subtitle{text-align:center;color:#a9a4ae;margin:0 0 24px}
+.auth-google{display:flex;align-items:center;justify-content:center;gap:12px;background:#25242b;color:#fff;border:1px solid #49434d;border-radius:11px;padding:13px;text-decoration:none;font-weight:650}.auth-google:hover{background:#343039}.google-g{font-weight:900;color:#4285f4;font-size:21px}
+.auth-divider{display:flex;align-items:center;gap:14px;color:#89838e;font-size:12px;margin:19px 0}.auth-divider:before,.auth-divider:after{content:'';flex:1;height:1px;background:#37313c}
+.auth-tabs{display:flex;background:#121217;border:1px solid #38313c;border-radius:11px;padding:4px;margin-bottom:18px}.auth-tabs button{flex:1;border:0;background:transparent;color:#bbb5c0;border-radius:8px;padding:11px;cursor:pointer;font-weight:700}.auth-tabs button.active{background:#e84b60;color:#fff}
+.auth-box form label{display:block;font-size:13px;color:#c8c2cc;margin:0 0 13px}.auth-box form input{box-sizing:border-box;display:block;width:100%;margin-top:7px;border-radius:10px;border:1px solid #46404a;background:#111116;color:#fff;padding:12px 13px;font-size:15px;min-height:44px}.auth-box form input:focus{outline:2px solid #e84b60;outline-offset:1px}.auth-box .auth-submit{display:block;width:100%;margin-top:18px;padding:13px;border:0;border-radius:11px;background:#ee5263;color:white;font-weight:750;cursor:pointer}.auth-box .auth-submit:hover{background:#ff6273}
+.auth-box form[hidden]{display:none!important}.auth-note{font-size:12px;text-align:center;color:#a9a4ae;margin-top:18px}.auth-box .alert{margin:10px 0;padding:10px;border-radius:8px;background:#542431;color:#fff}
+@media(max-width:480px){.auth-center{align-items:flex-start;padding-top:30px}.auth-box{padding:23px 20px;border-radius:18px}}
