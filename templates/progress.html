@@ -1,8 +1,43 @@
-{% extends 'base.html' %}{% block content %}
-<div class="progress-hero"><div><div class="eyebrow">PERSONAL ANALYTICS</div><h1>Your progress, <em>{{p.display_name}}</em></h1><p>See your activity patterns and training history. Only your own records appear here.</p></div><a class="progress-back" href="/dashboard">← Dashboard</a></div>
-{% if not has_data %}<section class="panel"><h2>Your journey starts here</h2><p>No progress records yet. Log your first workout or update your weight in your profile to start tracking.</p><a class="textlink" href="/dashboard#workouts">Log a workout →</a></section>{% endif %}
-<div class="progress-metrics"><div class="progress-metric"><span>All-time workouts</span><strong>{{total}}</strong><small>Recorded sessions</small></div><div class="progress-metric accent"><span>This month</span><strong>{{month_count}}</strong><small>Completed workouts</small></div><div class="progress-metric"><span>Weekly plan</span><strong>{{week_count}} / {{p.training_days}}</strong><small>{{adherence}}% of planned sessions</small></div><div class="progress-metric"><span>Weight history</span><strong>{% if weight_delta is not none %}{{'%+.1f'|format(weight_delta)}} kg{% else %}—{% endif %}</strong><small>Change between first and latest log</small></div></div>
-<div class="progress-grid"><section class="panel"><h2>Last 7 days</h2><p class="muted">Workouts logged per day</p><div class="progress-bars">{% for d in weekly %}<div class="progress-bar-cell"><div class="progress-bar" style="height:{{12 + [d.count * 26, 84]|min}}%" title="{{d.count}} workouts"></div><b>{{d.count}}</b><small>{{d.label}}</small></div>{% endfor %}</div></section><section class="panel"><h2>Weight log</h2><p class="muted">Your recorded weight entries, not a prediction</p>{% if weight_points %}<div class="progress-bars">{% for w in weight_points %}<div class="progress-bar-cell"><div class="progress-bar green" style="height:{{w.height}}%" title="{{w.label}}: {{w.value}} kg"></div><small>{{w.value}}</small></div>{% endfor %}</div>{% else %}<p>No weight entries yet.</p>{% endif %}<a class="textlink" href="/profile">Update weight →</a></section></div>
-<section class="panel"><h2>Exercise summary</h2><p class="muted">Based on your saved workouts. Repetitions are not a measure of strength.</p>{% if exercises %}<div class="exercise-summary">{% for e in exercises %}<div><b>{{e.exercise}}</b><span>{{e.times}} sessions</span><span>{{e.sets_total}} sets</span><span>{{e.reps_total}} total reps</span></div>{% endfor %}</div>{% else %}<p>Log workouts to see your most frequent exercises.</p>{% endif %}</section>
-<section class="panel"><h2>Progress insights</h2>{% if total == 0 %}<p>Complete a workout to unlock your first activity insight.</p>{% else %}<p>You logged <b>{{week_count}}</b> workout(s) this week and <b>{{month_count}}</b> this month. Your weekly plan is {{p.training_days}} session(s). {% if week_count >= p.training_days %}You have reached your planned session count this week.{% else %}You can use your calendar to plan sessions that fit your schedule and recovery.{% endif %}</p>{% endif %}<p class="muted">These are rule-based summaries of your own logs, not medical advice or AI predictions.</p></section>
+{% extends 'base.html' %}
+{% block content %}
+<div class="progress-hero tp-progress-hero"><div><div class="eyebrow">YOUR ACTIVITY</div><h1>Progress &amp; insights</h1><p>Real sessions from your private workout tracker. No invented data.</p></div><a class="tp-outline-link" href="/workouts">＋ Log workout</a></div>
+{% if not total %}<div class="tp-empty tp-empty-wide"><span aria-hidden="true">▥</span><h2>Your workout history starts here</h2><p>You haven't logged any workout sessions yet. Save your first session to see your activity charts.</p><a class="btn primary" href="/workouts">Log first workout ↗</a></div>{% endif %}
+<div class="tp-metrics tp-progress-metrics">
+  <div class="tp-metric"><small>All-time workouts</small><strong>{{ total }}</strong><span>Recorded sessions</span></div>
+  <div class="tp-metric"><small>This month</small><strong>{{ month_count }}</strong><span>Completed workouts</span></div>
+  <div class="tp-metric"><small>This week</small><strong>{{ week_count }} <span>/ {{ p.training_days }}</span></strong><span>{{ adherence }}% of weekly preference (max 100%)</span></div>
+  <div class="tp-metric"><small>Exercise sets</small><strong>{{ total_sets }}</strong><span>Across saved sessions</span></div>
+</div>
+<div class="tp-chart-grid">
+  <section class="tp-panel"><div class="tp-panel-heading"><h2>Last 7 days</h2><span class="tp-tag">Sessions per day</span></div>
+    <div class="tp-bars" role="img" aria-label="Last seven days: {% for d in weekly %}{{ d.label }} {{ d.count }} sessions{% if not loop.last %}, {% endif %}{% endfor %}">
+      {% set daymax = ([1] + (weekly|map(attribute='count')|list))|max %}
+      {% for d in weekly %}<div class="tp-bar-column"><b>{{ d.count }}</b><div class="tp-bar-track"><span style="height:{{ (d.count/daymax*100)|round|int }}%"></span></div><small>{{ d.label }}</small></div>{% endfor %}
+    </div>
+  </section>
+  <section class="tp-panel"><div class="tp-panel-heading"><h2>Last 6 months</h2><span class="tp-tag">Sessions per month</span></div>
+    <div class="tp-bars" role="img" aria-label="Last six months: {% for d in monthly %}{{ d.label }} {{ d.count }} sessions{% if not loop.last %}, {% endif %}{% endfor %}">
+      {% set monthmax = ([1] + (monthly|map(attribute='count')|list))|max %}
+      {% for d in monthly %}<div class="tp-bar-column"><b>{{ d.count }}</b><div class="tp-bar-track tp-bar-track-secondary"><span style="height:{{ (d.count/monthmax*100)|round|int }}%"></span></div><small>{{ d.label }}</small></div>{% endfor %}
+    </div>
+  </section>
+</div>
+<div class="tp-chart-grid">
+  <section class="tp-panel"><div class="tp-panel-heading"><h2>Exercise summary</h2><span class="tp-tag">Most logged</span></div>
+    {% if exercises %}<div class="tp-exercise-summary"><div class="tp-summary-headers"><span>Exercise</span><span>Entries</span><span>Sets</span><span>Reps*</span></div>
+      {% for e in exercises %}<div class="tp-summary-row"><b>{{ e.exercise }}</b><span>{{ e.times }}</span><span>{{ e.sets_total }}</span><span>{{ e.reps_total }}</span></div>{% endfor %}</div>
+      <small class="tp-muted">*Reps = saved sets × repetitions. Not a measurement of strength.</small>
+    {% else %}<p class="tp-subtle">Log a workout to see which exercises you practise most.</p>{% endif %}
+  </section>
+  <section class="tp-panel"><div class="tp-panel-heading"><h2>Activity insights</h2><span class="tp-tag">From your logs</span></div>
+    {% if total %}<p class="tp-insight">You logged <strong>{{ week_count }}</strong> session{% if week_count != 1 %}s{% endif %} this week and <strong>{{ month_count }}</strong> this month.</p><p class="tp-subtle">Your preferred weekly schedule is {{ p.training_days }} session{% if p.training_days != 1 %}s{% endif %}. Rest and flexibility are part of a sustainable routine.</p>
+    {% else %}<p class="tp-subtle">Once you record a workout, this page will summarise your weekly and monthly activity.</p>{% endif %}
+    <p class="tp-muted">These are rule-based summaries of your own records, not predictions or medical advice.</p>
+    <a class="tp-outline-link" href="/workouts">Open workout tracker ↗</a>
+  </section>
+</div>
+<section class="tp-panel tp-recent-panel"><div class="tp-panel-heading"><h2>Recent sessions</h2><a class="tp-textlink" href="/workouts">View / edit all ↗</a></div>
+  {% if recent_sessions %}<div class="tp-progress-recent">{% for s in recent_sessions %}<article class="tp-progress-session"><span>{{ s.completed_on }}</span><div><b>{{ s.title }}</b><small>{% for e in s.exercises %}{{ e.exercise }} ({{ e.sets }} × {{ e.reps }}){% if not loop.last %} · {% endif %}{% endfor %}</small></div></article>{% endfor %}</div>
+  {% else %}<p class="tp-subtle">No saved sessions yet.</p>{% endif %}
+</section>
 {% endblock %}
