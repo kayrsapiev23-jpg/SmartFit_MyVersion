@@ -428,10 +428,16 @@ def coach_history(request:Request):
     user=uid(request)
     if user is None:
         return JSONResponse({'error':'Please sign in again.'},status_code=401)
+    # Only fetch the signed-in user's actual training data. No demo values.
     with db() as c:
         row=c.execute('SELECT fitness_goal,experience,training_days,equipment FROM profiles WHERE user_id=?',
                       (user,)).fetchone()
+        recent=c.execute('SELECT title,completed_on FROM workout_sessions WHERE user_id=? ORDER BY completed_on DESC,id DESC LIMIT 5',
+                         (user,)).fetchall()
+        total=c.execute('SELECT COUNT(*) AS n FROM workout_sessions WHERE user_id=?',(user,)).fetchone()['n']
     context={key:row[key] for key in ('fitness_goal','experience','training_days','equipment')} if row else {}
+    context['workout_count']=total
+    context['recent_workouts']=[{'title':r['title'],'date':r['completed_on']} for r in recent]
     return {'messages':_coach_history(user,30),'mode':'browser','context':context}
 
 @app.post('/api/coach/turn')
