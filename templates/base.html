@@ -5,13 +5,13 @@
 <button class="agent-fab agent-trigger" type="button" aria-label="Open AI Coach">✦</button>
 <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
 <aside class="agent-drawer" id="agentDrawer" aria-hidden="true" aria-label="AI fitness coach">
-  <div class="drawer-head"><div class="sparkle">✦</div><div><b>SmartFit AI Coach</b><small>Free · Runs on your device</small></div><a class="coach-expand" href="/agent" aria-label="Open full chat">↗</a><button id="closeDrawer" type="button" aria-label="Close AI Coach">×</button></div>
-  <div class="coach-drawer-start"><button type="button" class="coach-start" data-start-coach>Start free AI</button><small data-coach-status>Not started · Runs in your browser</small></div>
+  <div class="drawer-head"><div class="sparkle">✦</div><div><b>SmartFit AI Coach</b><small>Guided tools · Optional local AI</small></div><a class="coach-expand" href="/agent" aria-label="Open full chat">↗</a><button id="closeDrawer" type="button" aria-label="Close AI Coach">×</button></div>
+  <div class="coach-drawer-start"><button type="button" class="coach-start" data-start-coach>Start free AI</button><small data-coach-status>Guided tools ready · AI optional</small></div>
   <div class="coach-progress" data-coach-progress-wrap hidden><div class="coach-progress-track"><span data-coach-progress-fill></span></div><small data-coach-progress-text>Preparing model…</small></div>
-  <div class="coach-messages drawer-body" id="drawerMessages" role="log" aria-live="polite"><div class="coach-placeholder"><span class="coach-placeholder-mark">✦</span><b>Your training questions, answered.</b><p>Ask about exercise technique, building a routine or recovering between sessions.</p></div></div>
-  <div class="coach-drawer-suggestions"><button type="button" class="prompt-chip" data-prompt="Help me make a balanced beginner workout plan">Create a routine</button><button type="button" class="prompt-chip" data-prompt="How should I track my workout progress?">Track progress</button></div>
+  <div class="coach-messages drawer-body" id="drawerMessages" role="log" aria-live="polite"><div class="coach-placeholder"><span class="coach-placeholder-mark">✦</span><b>Your training, guided.</b><p>My plan and My progress work immediately, even without loading a model.</p></div></div>
+  <div class="coach-drawer-suggestions"><button type="button" class="prompt-chip coach-guided-action" data-coach-guided="plan">My plan · instant</button><button type="button" class="prompt-chip coach-guided-action" data-coach-guided="progress">My progress · instant</button></div>
   <form id="drawerChatForm" class="drawer-form coach-form"><input id="coachQuestion" name="message" maxlength="700" placeholder="Message your coach..." aria-label="Message to coach" required><button type="submit" aria-label="Send message">➤</button></form>
-  <div class="drawer-disclaimer">AI may make mistakes · Educational information only</div>
+  <div class="drawer-disclaimer">Guided plan + progress do not require AI · Educational use</div>
 </aside>
 {% endif %}
-<script src="/static/js/experience.js?v=webllm1" defer></script></body></html>
+<script src="/static/js/experience.js?v=hybrid2" defer></script></body></html>
