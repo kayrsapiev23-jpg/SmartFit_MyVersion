@@ -470,7 +470,7 @@ async def coach_guided_assist(request: Request):
         profile = dict(raw) if raw else {}
         if intent=='progress':
             session_rows = c.execute('SELECT title,completed_on FROM workout_sessions WHERE user_id=? ORDER BY completed_on DESC,id DESC',(user,)).fetchall()
-            exercise_rows = c.execute("""SELECT e.exercise,COUNT(*) AS total FROM exercise_logs e
+            exercise_rows = c.execute("""SELECT MIN(e.exercise) AS exercise,COUNT(*) AS total FROM exercise_logs e
                 JOIN workout_sessions s ON s.id=e.session_id WHERE s.user_id=?
                 GROUP BY LOWER(e.exercise) ORDER BY total DESC LIMIT 5""",(user,)).fetchall()
         else:
