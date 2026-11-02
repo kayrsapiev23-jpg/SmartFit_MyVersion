@@ -1,1 +1,57 @@
-{% extends 'base.html' %}{% block content %}<div class="page-intro"><span class="eyebrow">TRAINING JOURNAL</span><h1>Workout tracker</h1><p>Record your activities and look back on what you have done.</p></div><div class="split-layout"><section class="surface padded"><h2>Log a workout</h2><form action="/workouts" method="post" class="gridform"><input type="hidden" name="token" value="{{csrf}}"><label>Session name<input name="title" placeholder="Full body A" required></label><label>Date<input type="date" name="completed_on" value="{{today}}" max="{{today}}" required></label><label>Exercise<input name="exercise" placeholder="Chair squat" required></label><label>Sets<input type="number" name="sets" min="1" max="20" value="3" required></label><label>Reps<input type="number" name="reps" min="1" max="100" value="10" required></label><label>Notes<input name="notes" maxlength="300" placeholder="Optional"></label><button class="btn primary">Save workout</button></form></section><section class="surface padded"><h2>Recent sessions</h2><ul class="list">{% for s in sessions %}<li><div><b>{{s.title}}</b><small>{{s.completed_on}}</small></div><form action="/workouts/{{s.id}}/delete" method="post"><input type="hidden" name="token" value="{{csrf}}"><button class="small" type="submit">Delete</button></form></li>{% else %}<li>Nothing logged yet. Your first session will appear here.</li>{% endfor %}</ul></section></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-intro tracker-heading"><span class="eyebrow">TRAINING JOURNAL</span><h1>Workout tracker</h1><p>Save your sessions, keep exercise details together and review your activity over time.</p></div>
+{% if status == 'saved' %}<div class="tp-flash" role="status">✓ Workout saved. Your progress has been updated.</div>{% elif status == 'updated' %}<div class="tp-flash" role="status">✓ Workout updated.</div>{% elif status == 'deleted' %}<div class="tp-flash" role="status">✓ Workout deleted.</div>{% endif %}
+<div class="tp-metrics">
+  <div class="tp-metric"><small>Logged sessions</small><strong>{{ total }}</strong><span>All time</span></div>
+  <div class="tp-metric"><small>This week</small><strong>{{ thisweek }} <span>/ {{ p.training_days }}</span></strong><span>Sessions / weekly preference</span></div>
+  <div class="tp-metric"><small>Next step</small><a href="/progress" class="tp-metric-action">See progress ↗</a><span>Charts and exercise insights</span></div>
+</div>
+<div class="tp-layout">
+  <section class="tp-panel" aria-labelledby="new-workout-title">
+    <div class="tp-panel-heading"><h2 id="new-workout-title">Log a workout</h2><span class="tp-tag">Private</span></div>
+    <p class="tp-subtle">Record what you actually completed. Add as many exercises as needed, up to 12.</p>
+    <form action="/workouts" method="post" class="tp-workout-form">
+      <input type="hidden" name="token" value="{{ csrf }}">
+      <div class="tp-form-grid"><label>Session name<input type="text" name="title" placeholder="Full body A" maxlength="100" required></label>
+      <label>Completed on<input type="date" name="completed_on" value="{{ today }}" max="{{ today }}" min="2000-01-01" required></label></div>
+      <div class="tp-exercise-head"><h3>Exercises</h3><span>Sets × reps</span></div>
+      <div class="tp-exercise-list" data-exercise-list>
+        <div class="tp-exercise-row"><label>Exercise<input type="text" name="exercise" placeholder="Chair squat" maxlength="100" required></label><label>Sets<input type="number" name="sets" min="1" max="20" value="2" required></label><label>Reps<input type="number" name="reps" min="1" max="100" value="10" required></label><button type="button" data-remove-exercise class="tp-icon-btn" aria-label="Remove exercise" title="Remove exercise">×</button></div>
+      </div>
+      <button type="button" class="tp-add-btn" data-add-exercise>＋ Add exercise</button>
+      <label class="tp-notes-label">Session notes (optional)<textarea name="notes" rows="3" maxlength="300" placeholder="How did it feel?"></textarea></label>
+      <button class="btn primary tp-save-btn" type="submit">Save workout <span>↗</span></button>
+    </form>
+  </section>
+  <section class="tp-panel" aria-labelledby="history-title">
+    <div class="tp-panel-heading"><h2 id="history-title">Workout history</h2><span class="tp-tag">{{ total }} sessions</span></div>
+    {% if sessions %}<p class="tp-subtle">Most recent 60 sessions. Each entry can be edited or removed.</p>
+    <div class="tp-history">
+      {% for s in sessions %}
+      <article class="tp-session">
+        <div class="tp-session-head"><div><span class="tp-date">{{ s.completed_on }}</span><h3>{{ s.title }}</h3></div><span class="tp-session-count">{{ s.exercises|length }} exercise{% if s.exercises|length != 1 %}s{% endif %}</span></div>
+        <ul class="tp-session-exercises">{% for e in s.exercises %}<li><span>{{ e.exercise }}</span><b>{{ e.sets }} × {{ e.reps }}</b></li>{% endfor %}</ul>
+        {% if s.notes %}<p class="tp-session-notes">{{ s.notes }}</p>{% endif %}
+        <div class="tp-session-actions"><details class="tp-edit"><summary>Edit session</summary>
+          <form method="post" action="/workouts/{{ s.id }}/edit" class="tp-workout-form tp-edit-form">
+            <input type="hidden" name="token" value="{{ csrf }}">
+            <div class="tp-form-grid"><label>Session name<input name="title" maxlength="100" value="{{ s.title }}" required></label><label>Date<input type="date" name="completed_on" value="{{ s.completed_on }}" min="2000-01-01" max="{{ today }}" required></label></div>
+            <div class="tp-exercise-list" data-exercise-list>
+              {% for e in s.exercises %}<div class="tp-exercise-row"><label>Exercise<input name="exercise" value="{{ e.exercise }}" maxlength="100" required></label><label>Sets<input type="number" name="sets" value="{{ e.sets }}" min="1" max="20" required></label><label>Reps<input type="number" name="reps" value="{{ e.reps }}" min="1" max="100" required></label><button type="button" data-remove-exercise class="tp-icon-btn" aria-label="Remove exercise" title="Remove exercise">×</button></div>{% endfor %}
+            </div>
+            <button type="button" class="tp-add-btn" data-add-exercise>＋ Add exercise</button>
+            <label class="tp-notes-label">Notes<textarea name="notes" rows="2" maxlength="300">{{ s.notes or '' }}</textarea></label>
+            <button class="btn primary" type="submit">Save changes</button>
+          </form>
+        </details>
+        <form action="/workouts/{{ s.id }}/delete" method="post" onsubmit="return confirm('Delete this workout permanently?');"><input type="hidden" name="token" value="{{ csrf }}"><button type="submit" class="tp-delete-btn">Delete</button></form></div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<div class="tp-empty"><span aria-hidden="true">◈</span><h3>No workouts logged yet</h3><p>Your first workout will appear here after you save it.</p></div>{% endif %}
+  </section>
+</div>
+<template id="tp-exercise-template"><div class="tp-exercise-row"><label>Exercise<input type="text" name="exercise" placeholder="Exercise name" maxlength="100" required></label><label>Sets<input type="number" name="sets" min="1" max="20" value="2" required></label><label>Reps<input type="number" name="reps" min="1" max="100" value="10" required></label><button type="button" data-remove-exercise class="tp-icon-btn" aria-label="Remove exercise" title="Remove exercise">×</button></div></template>
+<script src="/static/js/tracker.js?v=1" defer></script>
+{% endblock %}
