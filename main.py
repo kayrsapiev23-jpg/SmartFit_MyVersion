@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pwdlib import PasswordHash
 from authlib.integrations.starlette_client import OAuth
+from hybrid_coach import classify_coach_intent, create_workout_plan, analyze_workout_progress
 
 ROOT=Path(__file__).resolve().parent
 DB_PATH=Path(os.environ.get('SMARTFIT_DB_PATH',str(ROOT/'smartfit_private.db')))
@@ -439,6 +440,45 @@ def coach_history(request:Request):
     context['workout_count']=total
     context['recent_workouts']=[{'title':r['title'],'date':r['completed_on']} for r in recent]
     return {'messages':_coach_history(user,30),'mode':'browser','context':context}
+
+@app.post('/api/coach/assist')
+async def coach_guided_assist(request: Request):
+    """Account-grounded plan and progress; no WebGPU, LLM or paid APIs."""
+    user = uid(request)
+    if user is None:
+        return JSONResponse({'error':'Please sign in again.'},status_code=401)
+    require_csrf(request, request.headers.get('x-csrf-token',''))
+    if int(request.headers.get('content-length','0') or 0) > 3000:
+        return JSONResponse({'error':'Question too large.'},status_code=413)
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return JSONResponse({'error':'Invalid JSON.'},status_code=400)
+    if not isinstance(body,dict):
+        return JSONResponse({'error':'Invalid request.'},status_code=400)
+    question = body.get('question','')
+    action = body.get('action','auto')
+    if not isinstance(question,str) or len(question)>700 or not isinstance(action,str):
+        return JSONResponse({'error':'Invalid request.'},status_code=400)
+    if action not in ('auto','plan','progress'):
+        return JSONResponse({'error':'Unknown coach action.'},status_code=400)
+    intent = classify_coach_intent(question) if action=='auto' else action
+    if intent not in ('plan','progress'):
+        return {'handled':False}
+    with db() as c:
+        raw = c.execute('SELECT fitness_goal,experience,training_days,equipment FROM profiles WHERE user_id=?',(user,)).fetchone()
+        profile = dict(raw) if raw else {}
+        if intent=='progress':
+            session_rows = c.execute('SELECT title,completed_on FROM workout_sessions WHERE user_id=? ORDER BY completed_on DESC,id DESC',(user,)).fetchall()
+            exercise_rows = c.execute("""SELECT e.exercise,COUNT(*) AS total FROM exercise_logs e
+                JOIN workout_sessions s ON s.id=e.session_id WHERE s.user_id=?
+                GROUP BY LOWER(e.exercise) ORDER BY total DESC LIMIT 5""",(user,)).fetchall()
+        else:
+            session_rows = []
+            exercise_rows = []
+    answer = (create_workout_plan(profile) if intent=='plan' else
+              analyze_workout_progress(profile,[dict(row) for row in session_rows],[dict(row) for row in exercise_rows]))
+    return {'handled':True,'mode':intent,'answer':answer[:3000]}
 
 @app.post('/api/coach/turn')
 async def coach_save_browser_turn(request:Request):
