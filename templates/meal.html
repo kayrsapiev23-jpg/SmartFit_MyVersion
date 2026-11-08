@@ -1,1 +1,35 @@
-{% extends 'base.html' %}{% block content %}<div class="intro"><h1>Meal photo description</h1><p>Optional AI-powered visual description. Images are not stored in SmartFit. No exact nutrition estimates are claimed.</p></div><div class="panel narrow"><form action="/meal" method="post" enctype="multipart/form-data"><input type="hidden" name="token" value="{{csrf}}"><label>Food photo (JPG, PNG, WebP, max 3 MB)<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></label><button>Describe food</button></form>{% if error %}<p class="alert">{{error}}</p>{% endif %}{% if result %}<h3>Possible visible foods</h3><p>{{result}}</p><p class="muted">Visual estimates can be wrong. Check ingredients yourself.</p>{% endif %}</div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="intro">
+  <div class="eyebrow">NUTRITION · FREE LOCAL AI</div>
+  <h1>AI Food Scanner</h1>
+  <p>Identify a dish from a photo using a free AI model running in your own browser. No OpenAI API key or paid account needed.</p>
+</div>
+<section class="panel narrow food-scanner" aria-labelledby="food-scanner-title">
+  <h2 id="food-scanner-title">Recognize a meal</h2>
+  <p class="muted">Choose a JPG, PNG, or WebP photo (maximum 3 MB). The image stays in your browser; the first scan downloads an AI model and may take longer.</p>
+  <label for="food-photo">Food photo</label>
+  <input id="food-photo" type="file" accept="image/jpeg,image/png,image/webp">
+  <div id="food-preview" hidden>
+    <img id="food-preview-img" alt="Preview of the selected meal photo">
+  </div>
+  <button type="button" class="btn primary" id="scan-food">Identify food — free AI</button>
+  <p id="food-status" role="status" aria-live="polite">Choose a photo to begin.</p>
+  <div id="food-results" class="food-results" hidden aria-live="polite"></div>
+  <p class="muted">Educational tool only. AI suggestions are not always accurate. It cannot measure a serving's calories or macronutrients from a photo.</p>
+</section>
+<style>
+.food-scanner input[type=file]{margin:12px 0 20px}
+.food-scanner #food-preview{margin:0 0 20px}
+.food-scanner #food-preview-img{display:block;width:min(100%,380px);max-height:260px;object-fit:contain;border-radius:14px;background:#101118}
+.food-scanner #food-status{margin:16px 0;color:#ffb9c0;line-height:1.6}
+.food-scanner .food-results{margin:18px 0;padding:18px;border:1px solid #64414d;border-radius:14px;background:#2b222e}
+.food-scanner .food-results h2{margin:0 0 12px}
+.food-scanner .food-results ol{padding-left:24px}
+.food-scanner .food-results li{padding:5px 0}
+.food-scanner .food-results li span{color:#c4bac6;margin-left:8px;font-size:12px}
+.food-scanner .food-results p{font-size:12px;line-height:1.7;color:#c4bac6}
+.food-scanner button:disabled{opacity:.6;cursor:wait}
+</style>
+<script type="module" src="/static/js/food-scanner.js?v=1"></script>
+{% endblock %}
